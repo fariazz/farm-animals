@@ -1,30 +1,41 @@
 //this game will have only 1 state
 var GameState = {
-  //load the game assets before the game starts
-  preload: function() {
-    this.game.load.image('background', 'assets/images/background.png');
-    this.game.load.image('arrow', 'assets/images/arrow.png');
-    this.game.load.image('dog', 'assets/images/dog.png');
-    this.game.load.image('chicken', 'assets/images/chicken.png');
-    this.game.load.image('cow', 'assets/images/cow.png');
-    this.game.load.image('horse', 'assets/images/horse.png');
-    this.game.load.image('pig', 'assets/images/pig.png');
-    this.game.load.image('sheep', 'assets/images/sheep.png');
-  },
-  //executed after everything is loaded
-  create: function() {
+  //initiate game settings
+  init: function() {
+    //scaling options
+    this.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
+
+    //have the game centered horizontally
+    this.scale.pageAlignHorizontally = true;
+    this.scale.pageAlignVertically = true;
     
+  },
+
+  //load the game assets before the game starts
+  preload: function() {    
+    this.load.image('background', 'assets/images/background.png');
+    this.load.image('arrow', 'assets/images/arrow.png');
+    this.load.spritesheet('chicken', 'assets/images/chicken_spritesheet.png', 131, 200, 3);
+    this.load.spritesheet('horse', 'assets/images/horse_spritesheet.png', 212, 200, 3);
+    this.load.spritesheet('pig', 'assets/images/pig_spritesheet.png', 297, 200, 3);
+    this.load.spritesheet('sheep', 'assets/images/sheep_spritesheet.png', 244, 200, 3);
+    this.load.audio('chickenSound', ['assets/audio/chicken.ogg', 'assets/audio/chicken.mp3']);
+    this.load.audio('horseSound', ['assets/audio/horse.ogg', 'assets/audio/horse.mp3']);
+    this.load.audio('pigSound', ['assets/audio/pig.ogg', 'assets/audio/pig.mp3']);
+    this.load.audio('sheepSound', ['assets/audio/sheep.ogg', 'assets/audio/sheep.mp3']);
+  },
+
+  //executed once after everything is loaded
+  create: function() {
     //create a sprite for the background
-    this.background = this.game.add.sprite(0, 0, 'background')
+    this.background = this.game.add.sprite(0, 0, 'background');
     
     //group for animals
     var animalData = [
-      {key: 'dog', text: 'DOG'},
-      {key: 'chicken', text: 'CHICKEN'},
-      {key: 'cow', text: 'COW'},
-      {key: 'horse', text: 'HORSE'},
-      {key: 'pig', text: 'PIG'},
-      {key: 'sheep', text: 'SHEEP'}
+      {key: 'chicken', text: 'CHICKEN', audio: 'chickenSound'},
+      {key: 'horse', text: 'HORSE', audio: 'horseSound'},
+      {key: 'pig', text: 'PIG', audio: 'pigSound'},
+      {key: 'sheep', text: 'SHEEP', audio: 'sheepSound'}
     ];
 
     //create a group to store all animals
@@ -34,13 +45,16 @@ var GameState = {
     var animal;
     animalData.forEach(function(element){
       //create each animal and save it's properties
-      animal = self.animals.create(-1000, self.game.world.centerY, element.key);
+      animal = self.animals.create(-1000, self.game.world.centerY, element.key, 0);
 
       //I'm saving everything that's not Phaser-related in an object
-      animal.customParams = {text: element.key};
+      animal.customParams = {text: element.text, sound: self.game.add.audio(element.audio)};
 
       //anchor point set to the center of the sprite
       animal.anchor.setTo(0.5);
+
+      //create animal animation
+      animal.animations.add('animate', [0, 1, 2, 1, 0, 1], 3, false);
 
       //enable input so we can touch it
       animal.inputEnabled = true;
@@ -51,7 +65,8 @@ var GameState = {
     //place first animal in the middle
     this.currentAnimal = this.animals.next();
     this.currentAnimal.position.set(this.game.world.centerX, this.game.world.centerY);
-
+    this.showText(this.currentAnimal);
+    
     //left arrow
     this.leftArrow = this.game.add.sprite(60, this.game.world.centerY, 'arrow');
     this.leftArrow.anchor.setTo(0.5);
@@ -71,16 +86,20 @@ var GameState = {
     //right arrow user input
     this.rightArrow.inputEnabled = true;
     this.rightArrow.input.pixelPerfectClick = true;
-    this.rightArrow.events.onInputDown.add(this.switchAnimal, this);    
+    this.rightArrow.events.onInputDown.add(this.switchAnimal, this);  
+    
+  },
 
-  },
   //this is executed multiple times per second
-  update: function() {
+  update: function() {    
   },
-  //play animal animation
+  
+  //play animal animation and sound
   animateAnimal: function(sprite, event) {
-    console.log('animate..');
+    sprite.play('animate');
+    sprite.customParams.sound.play();
   },
+  
   //switch animal
   switchAnimal: function(sprite, event) {
 
@@ -90,6 +109,9 @@ var GameState = {
     }
 
     this.isMoving = true;
+
+    //hide text
+    this.animalText.visible = false;
 
     var newAnimal, endX;
     //according to the arrow they pressed, which animal comes in
@@ -107,7 +129,13 @@ var GameState = {
     //tween animations, moving on x
     var newAnimalMovement = game.add.tween(newAnimal);
     newAnimalMovement.to({ x: this.game.world.centerX }, 1000);
-    newAnimalMovement.onComplete.add(function(){this.isMoving = false;}, this);
+    newAnimalMovement.onComplete.add(function()
+      {
+        this.isMoving = false;
+
+        //show text
+        this.showText(newAnimal);
+      }, this);
     newAnimalMovement.start();
 
     var currentAnimalMovement = game.add.tween(this.currentAnimal);
@@ -115,12 +143,25 @@ var GameState = {
     currentAnimalMovement.start();
 
     this.currentAnimal = newAnimal;
-  }
+  },
+  showText: function(animal) {
+    //create the text object if it doesn't exist
+    if(!this.animalText) {
+      var style = {font: "bold 30pt Arial", fill: "#D0171B", align: "center"};
+      this.animalText = this.game.add.text(this.game.width/2, this.game.height * 0.85, 'asdfasfd' , style);
+      this.animalText.anchor.setTo(0.5);
+    }
 
+    this.animalText.setText(animal.customParams.text);
+    this.animalText.visible = true;
+  }
 };
 
 //initiate the Phaser framework
 var game = new Phaser.Game(640, 360, Phaser.AUTO);
 
+//add the state to the game object
 game.state.add('GameState', GameState);
+
+//launch the state
 game.state.start('GameState');
